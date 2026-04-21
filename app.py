@@ -7,6 +7,10 @@ import streamlit as st
 from crew import run_faro
 from datetime import date
 
+st.html("""
+<script defer data-domain="faro-clinical-agent.fly.dev" src="https://plausible.io/js/script.js"></script>
+""")
+
 st.set_page_config(
     page_title="FARO — Clinical Trial Intelligence",
     page_icon="🔦",
@@ -109,24 +113,27 @@ if submitted:
 
         with st.spinner("Generating your personalized report..."):
             try:
+                st.write("🔍 Searching trials & research...")
                 result = run_faro(
                     condition=condition,
                     patient_profile=patient_profile,
                 )
 
+                st.write("✓ Formatting report...")
                 # Inject date as subheading under the report title
                 lines = result.split('\n')
                 for i, line in enumerate(lines):
                     if line.startswith('# '):
                         lines.insert(i + 1, f"### {date.today().strftime('%B %d, %Y')}")
+                        # Add disclaimer right after date
+                        lines.insert(i + 2, "")
+                        lines.insert(i + 3, "> ⚠️ **Educational Information Only** — This report is for informational purposes only and does not constitute medical advice. Always consult your child's healthcare provider before making any treatment decisions. Clinical trial eligibility must be verified directly with trial sites.")
                         break
                 result = '\n'.join(lines)
 
-                progress_placeholder.empty()
-
+                status.update(label="Complete!", state="complete")
                 st.success("✅ Your report is ready!")
                 st.divider()
-
                 st.markdown(result)
 
                 st.divider()
@@ -136,6 +143,18 @@ if submitted:
                     file_name=f"FARO_report_{condition.replace(' ', '_')}.txt",
                     mime="text/plain",
                 )
+
+                # ... feedback buttons ...
+                st.divider()
+                st.markdown("### Was this report helpful?")
+                col1, col2 = st.columns(2)
+                with col1:
+                     if st.button("👍 Yes, useful"):
+                        st.success("Thank you! Your feedback helps improve FARO.")
+                with col2:
+                     if st.button("👎 Could be better"):
+                        st.info("We'd love to know how to improve. Email feedback to pkotecha@gmail.com")
+                
 
             except Exception as e:
                 progress_placeholder.empty()
