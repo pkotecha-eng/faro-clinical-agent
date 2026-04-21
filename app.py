@@ -114,10 +114,13 @@ if submitted:
                     patient_profile=patient_profile,
                 )
 
-                result = result.replace(
-                "[Current Date]", 
-                 date.today().strftime("%B %d, %Y")
-                )
+                # Inject date as subheading under the report title
+                lines = result.split('\n')
+                for i, line in enumerate(lines):
+                    if line.startswith('# '):
+                        lines.insert(i + 1, f"### {date.today().strftime('%B %d, %Y')}")
+                        break
+                result = '\n'.join(lines)
 
                 progress_placeholder.empty()
 

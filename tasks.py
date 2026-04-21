@@ -4,9 +4,10 @@ Tasks assigned to each agent
 """
 
 from crewai import Task
+from datetime import date
 
 
-def create_tasks(agents, condition: str, patient_profile: str):
+def create_tasks(agents, condition: str, patient_profile: str, context: str = None):
     """Create and return all FARO tasks."""
 
     trial_scout, literature_agent, eligibility_assessor, synthesizer = agents
@@ -47,11 +48,15 @@ def create_tasks(agents, condition: str, patient_profile: str):
         agent=literature_agent,
     )
 
-    # Task 3 — runs after Task 1 completes
+    # Task 3 — uses injected context string if provided (parallel flow),
+    # otherwise uses CrewAI task reference (sequential flow)
+    context_text = context if context else "See trial search results above."
+
     assess_eligibility = Task(
         description=(
             f"Based on the clinical trials found, assess eligibility for this patient:\n\n"
             f"Patient Profile: {patient_profile}\n\n"
+            f"Trial and literature context:\n{context_text}\n\n"
             f"For each trial:\n"
             f"1. State the NCT ID and trial title\n"
             f"2. List key inclusion criteria and whether this patient likely meets them\n"
@@ -66,14 +71,16 @@ def create_tasks(agents, condition: str, patient_profile: str):
             "and plain-language reasoning."
         ),
         agent=eligibility_assessor,
-        context=[find_trials],
+        context=[] if context else [find_trials],
     )
 
     # Task 4 — runs last, synthesizes everything
     synthesize_report = Task(
         description=(
+            f"Today's date is {date.today().strftime('%B %d, %Y')}. Use this as the report date.\n\n"
             f"Create a comprehensive, compassionate patient report combining all findings.\n\n"
-            f"Structure the report as follows:\n\n"
+            + (f"Context from parallel research:\n{context_text}\n\n" if context else "")
+            + f"Structure the report as follows:\n\n"
             f"1. PATIENT SUMMARY\n"
             f"   Brief restatement of the patient's situation\n\n"
             f"2. WHAT THE RESEARCH SAYS\n"
@@ -97,7 +104,7 @@ def create_tasks(agents, condition: str, patient_profile: str):
             "written in plain language that a patient can bring to their doctor."
         ),
         agent=synthesizer,
-        context=[find_trials, search_literature, assess_eligibility],
+        context=[] if context else [find_trials, search_literature, assess_eligibility],
     )
 
     return find_trials, search_literature, assess_eligibility, synthesize_report
