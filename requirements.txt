@@ -1,0 +1,7 @@
+crewai
+crewai-tools
+anthropic
+streamlit
+requests
+xmltodict
+python-dotenv
