@@ -12,6 +12,11 @@ from crewai import Agent, LLM
 
 load_dotenv()
 
+haiku = LLM(
+    model="claude-haiku-4-5-20251001",
+    api_key=os.environ.get("ANTHROPIC_API_KEY"),
+)
+
 claude = LLM(
     model="claude-sonnet-4-5",
     api_key=os.environ.get("ANTHROPIC_API_KEY"),
