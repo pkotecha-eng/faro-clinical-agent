@@ -1,0 +1,33 @@
+# flyctl launch added from .gitignore
+**/.env
+**/__pycache__
+**/*.pyc
+**/venv
+
+# flyctl launch added from venv/lib/python3.12/site-packages/chromadb/proto/.gitignore
+venv/lib/python3.12/site-packages/chromadb/proto/**/*_pb2.py*
+venv/lib/python3.12/site-packages/chromadb/proto/**/*_pb2_grpc.py
+
+# flyctl launch added from venv/lib/python3.12/site-packages/crewai/cli/templates/crew/.gitignore
+venv/lib/python3.12/site-packages/crewai/cli/templates/crew/**/.env
+venv/lib/python3.12/site-packages/crewai/cli/templates/crew/**/__pycache__
+venv/lib/python3.12/site-packages/crewai/cli/templates/crew/**/.DS_Store
+
+# flyctl launch added from venv/lib/python3.12/site-packages/crewai/cli/templates/flow/.gitignore
+venv/lib/python3.12/site-packages/crewai/cli/templates/flow/**/.env
+venv/lib/python3.12/site-packages/crewai/cli/templates/flow/**/__pycache__
+venv/lib/python3.12/site-packages/crewai/cli/templates/flow/**/lib
+venv/lib/python3.12/site-packages/crewai/cli/templates/flow/**/.DS_Store
+
+# flyctl launch added from venv/lib/python3.12/site-packages/crewai/cli/templates/tool/.gitignore
+# Python-generated files
+venv/lib/python3.12/site-packages/crewai/cli/templates/tool/**/__pycache__
+venv/lib/python3.12/site-packages/crewai/cli/templates/tool/**/*.py[oc]
+venv/lib/python3.12/site-packages/crewai/cli/templates/tool/**/build
+venv/lib/python3.12/site-packages/crewai/cli/templates/tool/**/dist
+venv/lib/python3.12/site-packages/crewai/cli/templates/tool/**/wheels
+venv/lib/python3.12/site-packages/crewai/cli/templates/tool/**/*.egg-info
+
+# Virtual environments
+venv/lib/python3.12/site-packages/crewai/cli/templates/tool/**/.venv
+fly.toml
