@@ -6,6 +6,21 @@ Patient-facing Streamlit web app
 import streamlit as st
 from crew import run_faro
 from datetime import date
+import uuid
+
+# ADD SESSION ID SETUP
+if 'session_id' not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
+
+# ADD LOGGING FUNCTIONS
+def log_run(condition, patient_type, session_id):
+    with open("faro_runs.log", "a") as f:
+        f.write(f"{date.today()},{session_id},{condition},{patient_type}\n")
+
+def log_download(condition, session_id):
+    with open("faro_downloads.log", "a") as f:
+        f.write(f"{date.today()},{session_id},{condition}\n")
+
 
 st.html("""
 <script defer data-domain="faro-clinical-agent.fly.dev" src="https://plausible.io/js/script.js"></script>
@@ -71,6 +86,11 @@ def _render_input_form():
                 placeholder="e.g. genetic test results, other diagnoses, symptoms",
                 height=100,
             )
+            patient_type = st.radio(
+                "Are you searching for a trial for yourself or a family member?",
+                ["Real medical situation", "Testing the tool"],
+                key="patient_type"
+            )
 
         submitted = st.form_submit_button(
             "🔦 Generate My Report",
@@ -104,14 +124,13 @@ if submitted:
     else:
         patient_profile = _build_patient_profile(age, location, treatments_tried, other_info)
 
+        log_run(condition, st.session_state.patient_type, st.session_state.session_id)
+
         st.divider()
         st.markdown("### 🤖 FARO is working...")
         st.caption("Four AI agents are searching trials, reviewing research, and preparing your report. This takes 2-3 minutes.")
 
-        progress_placeholder = st.empty()
-        progress_placeholder.info("🔍 Trial Scout searching ClinicalTrials.gov...")
-
-        with st.spinner("Generating your personalized report..."):
+        with st.status("Generating your report...", expanded=True) as status:
             try:
                 st.write("🔍 Searching trials & research...")
                 result = run_faro(
@@ -131,7 +150,7 @@ if submitted:
                         break
                 result = '\n'.join(lines)
 
-                status.update(label="Complete!", state="complete")
+                status.update(label="Report ready!", state="complete")
                 st.success("✅ Your report is ready!")
                 st.divider()
                 st.markdown(result)
@@ -143,6 +162,8 @@ if submitted:
                     file_name=f"FARO_report_{condition.replace(' ', '_')}.txt",
                     mime="text/plain",
                 )
+
+                log_download(condition, st.session_state.session_id)
 
                 # ... feedback buttons ...
                 st.divider()
@@ -157,5 +178,5 @@ if submitted:
                 
 
             except Exception as e:
-                progress_placeholder.empty()
+                status.update(label="Error occurred", state="error")
                 st.error(f"Something went wrong: {e}. Please try again.")
