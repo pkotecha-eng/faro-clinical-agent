@@ -81,6 +81,10 @@ def create_tasks(agents, condition: str, patient_profile: str, context: str = No
             f"Create a comprehensive, compassionate patient report combining all findings.\n\n"
             + (f"Context from parallel research:\n{context_text}\n\n" if context else "")
             + f"Structure the report as follows:\n\n"
+            f"0. WHAT THIS MEANS FOR YOU\n"
+            f"   3-4 sentences in plain everyday English summarizing the most important findings. "
+            f"   Write this for a parent or patient with no medical background. "
+            f"   No medical terms in this section at all.\n\n"
             f"1. PATIENT SUMMARY\n"
             f"   Brief restatement of the patient's situation\n\n"
             f"2. WHAT THE RESEARCH SAYS\n"
@@ -96,12 +100,15 @@ def create_tasks(agents, condition: str, patient_profile: str, context: str = No
             f"7. IMPORTANT DISCLAIMER\n"
             f"   This is for informational purposes only. "
             f"Always consult your healthcare team before making any decisions.\n\n"
-            f"Write with empathy, clarity, and hope. Avoid medical jargon. "
+            f"Language rules: Write with empathy, clarity, and hope. "
+            f"If a medical term must be used anywhere in the report, define it immediately in plain English in parentheses. "
+            f"Section 0 must contain zero medical jargon — no exceptions. "
             f"This report should be something a patient can print and bring to their doctor."
         ),
         expected_output=(
-            "A complete, well-structured patient report with all 7 sections, "
-            "written in plain language that a patient can bring to their doctor."
+            "A complete, well-structured patient report with all 8 sections, "
+            "(sections 0 through 7), written in plain language that a patient "
+            "can bring to their doctor."
         ),
         agent=synthesizer,
         context=[] if context else [find_trials, search_literature, assess_eligibility],

@@ -152,6 +152,7 @@ if submitted:
 
                 status.update(label="Report ready!", state="complete")
                 st.success("✅ Your report is ready!")
+                st.caption("📍 Results sourced from ClinicalTrials.gov. International trials (EU, academic institutions) may not be listed.")
                 st.divider()
                 st.markdown(result)
 
