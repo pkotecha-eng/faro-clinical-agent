@@ -7,6 +7,8 @@ import streamlit as st
 from crew import run_faro
 from datetime import date
 import uuid
+import threading
+import time
 
 # ADD SESSION ID SETUP
 if 'session_id' not in st.session_state:
@@ -100,6 +102,24 @@ def _render_input_form():
 
     return submitted, condition, age, location, treatments_tried, other_info
 
+def _progress_label(i):
+    if i < 25:
+        return "🔍 Trial Scout searching ClinicalTrials.gov..."
+    elif i < 50:
+        return "📚 Literature Researcher scanning PubMed..."
+    elif i < 75:
+        return "🧬 Eligibility Assessor reviewing your profile..."
+    else:
+        return "📝 Patient Care Navigator writing your report..."
+
+
+def _tick_progress(progress_bar, stop_progress):
+    for i in range(1, 92):
+        if stop_progress.is_set():
+            break
+        progress_bar.progress(i, text=_progress_label(i))
+        time.sleep(1.6)
+
 
 def _build_patient_profile(age, location, treatments_tried, other_info):
     parts = []
@@ -133,10 +153,23 @@ if submitted:
         with st.status("Generating your report...", expanded=True) as status:
             try:
                 st.write("🔍 Searching trials & research...")
+                
+                progress_bar = st.progress(0, text="🔍 Trial Scout searching ClinicalTrials.gov...")
+                stop_progress = threading.Event()
+
+                t = threading.Thread(target=_tick_progress, args=(progress_bar, stop_progress), daemon=True)
+                t.start()
+
                 result = run_faro(
                     condition=condition,
                     patient_profile=patient_profile,
                 )
+
+                stop_progress.set()
+                progress_bar.progress(100, text="✅ All agents complete!")
+                time.sleep(0.5)
+                progress_bar.empty()
+
 
                 st.write("✓ Formatting report...")
                 # Inject date as subheading under the report title
