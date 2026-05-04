@@ -14,21 +14,27 @@ def create_tasks(agents, condition: str, patient_profile: str, context: str = No
 
     # Task 1 — runs in parallel with Task 2
     find_trials = Task(
-        description=(
-            f"Search ClinicalTrials.gov for recruiting clinical trials for: {condition}.\n"
-            f"Find up to 5 relevant recruiting trials. For each trial capture:\n"
-            f"- NCT ID, title, phase, sponsor\n"
-            f"- Full eligibility criteria (inclusion and exclusion)\n"
-            f"- Locations\n"
-            f"- URL\n"
-            f"Return all trials with complete details."
-        ),
-        expected_output=(
-            "A detailed list of up to 5 recruiting clinical trials with NCT IDs, "
-            "phases, sponsors, eligibility criteria, locations, and URLs."
-        ),
-        agent=trial_scout,
-    )
+    description=(
+        f"Search for recruiting clinical trials for: {condition}.\n"
+        f"You have two tools available:\n"
+        f"1. Search Clinical Trials — searches ClinicalTrials.gov (US-focused)\n"
+        f"2. Search ISRCTN — searches UK and European trials not on ClinicalTrials.gov\n\n"
+        f"Use BOTH tools to find up to 5 relevant recruiting trials total. "
+        f"For each trial capture:\n"
+        f"- Trial ID (NCT ID or ISRCTN ID), title, phase, sponsor\n"
+        f"- Full eligibility criteria (inclusion and exclusion)\n"
+        f"- Locations or countries\n"
+        f"- Primary outcome\n"
+        f"- URL\n"
+        f"Return all trials with complete details, noting which registry each came from."
+    ),
+    expected_output=(
+        "A detailed list of up to 5 recruiting clinical trials from ClinicalTrials.gov "
+        "and/or ISRCTN, with trial IDs, phases, sponsors, eligibility criteria, "
+        "locations, primary outcomes, and URLs. Each trial should note its source registry."
+    ),
+    agent=trial_scout,
+)
 
     # Task 2 — runs in parallel with Task 1
     search_literature = Task(
@@ -58,7 +64,7 @@ def create_tasks(agents, condition: str, patient_profile: str, context: str = No
             f"Patient Profile: {patient_profile}\n\n"
             f"Trial and literature context:\n{context_text}\n\n"
             f"For each trial:\n"
-            f"1. State the NCT ID and trial title\n"
+            f"1. State the trial ID (NCT ID or ISRCTN ID) and trial title\n"
             f"2. List key inclusion criteria and whether this patient likely meets them\n"
             f"3. List key exclusion criteria and flag any potential disqualifiers\n"
             f"4. Rate eligibility: Likely Eligible / Possibly Eligible / Likely Ineligible\n"

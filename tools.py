@@ -116,6 +116,21 @@ def search_clinical_trials(
             contacts_module = protocol.get("contactsLocationsModule", {})
             sponsor_module = protocol.get("sponsorCollaboratorsModule", {})
 
+            outcomes_mod = protocol.get("outcomesModule", {})
+
+            primary_outcomes = outcomes_mod.get("primaryOutcomes") or []
+            primary_outcome = primary_outcomes[0].get("measure", "") if primary_outcomes else ""
+            if len(primary_outcome) > 300:
+              primary_outcome = primary_outcome[:297] + "..."
+
+            secondary_outcomes_list = outcomes_mod.get("secondaryOutcomes") or []
+            secondary_outcome_strs = [
+              o.get("measure", "") for o in secondary_outcomes_list[:3] if isinstance(o, dict)
+            ]
+            secondary_outcome = "; ".join(secondary_outcome_strs)
+            if len(secondary_outcome) > 300:
+              secondary_outcome = secondary_outcome[:297] + "..."
+
             nct_id = id_module.get("nctId", "")
             phases = design_module.get("phases", [])
             phase = ", ".join(phases) if phases else "N/A"
@@ -138,7 +153,74 @@ def search_clinical_trials(
                 "max_age": eligibility_module.get("maximumAge", "N/A"),
                 "locations": location_names,
                 "url": f"https://clinicaltrials.gov/study/{nct_id}",
+                "primary_outcome": primary_outcome,
+                "secondary_outcomes": secondary_outcome,
             })
+
+        return results
+
+    except Exception as e:
+        return [{"error": str(e)}]
+
+
+def search_isrctn(query: str, max_results: int = 5) -> list[dict]:
+    """Search ISRCTN registry for UK and European clinical trials."""
+    try:
+        url = "https://www.isrctn.com/api/query/format/who"
+        params = {"q": query, "limit": max_results * 2}  # fetch extra for relevance filtering
+        resp = requests.get(url, params=params, timeout=15)
+        data = xmltodict.parse(resp.content)
+
+        trials_el = (data.get("trials") or {}).get("trial")
+        if not trials_el:
+            return []
+        if isinstance(trials_el, dict):
+            trials_el = [trials_el]
+
+        # Relevance filter — all query terms must appear in title or condition
+        query_words = set(query.lower().split())
+
+        results = []
+        for trial in trials_el:
+            main = trial.get("main") or {}
+            title = main.get("public_title") or ""
+            condition = main.get("hc_freetext") or ""
+            searchable = f"{title} {condition}".lower()
+
+            if not all(word in searchable for word in query_words):
+                continue
+
+            criteria = trial.get("criteria") or {}
+            countries_el = trial.get("countries") or {}
+            country_raw = countries_el.get("country2")
+            if isinstance(country_raw, list):
+                countries = [c for c in country_raw if c]
+            elif country_raw:
+                countries = [country_raw]
+            else:
+                countries = []
+
+            primary_outcome_el = trial.get("primary_outcome") or {}
+            primary_outcome = primary_outcome_el.get("prim_outcome") or ""
+
+            results.append({
+                "trial_id": main.get("trial_id", ""),
+                "title": title,
+                "status": main.get("recruitment_status", "N/A"),
+                "phase": main.get("phase", "N/A"),
+                "sponsor": main.get("primary_sponsor", "N/A"),
+                "condition": condition,
+                "primary_outcome": primary_outcome[:300] if primary_outcome else "",
+                "countries": countries,
+                "min_age": criteria.get("agemin", "N/A"),
+                "max_age": criteria.get("agemax", "N/A"),
+                "gender": criteria.get("gender", "N/A"),
+                "eligibility_criteria": (criteria.get("inclusion_criteria") or "")[:400],
+                "url": main.get("url", ""),
+            })
+
+            if len(results) >= max_results:
+                break
 
         return results
 

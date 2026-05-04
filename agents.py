@@ -5,7 +5,7 @@ Four specialized agents working in parallel where possible
 
 from crewai.tools import BaseTool
 from pydantic import BaseModel, Field
-from tools import search_pubmed, search_clinical_trials
+from tools import search_pubmed, search_clinical_trials, search_isrctn
 import os
 from dotenv import load_dotenv
 from crewai import Agent, LLM
@@ -68,6 +68,7 @@ class ClinicalTrialsTool(BaseTool):
                 f"NCT ID: {t.get('nct_id')}\n"
                 f"Phase: {t.get('phase')}\n"
                 f"Sponsor: {t.get('sponsor')}\n"
+                f"Primary Outcome: {t.get('primary_outcome', '')}\n"
                 f"Status: {t.get('status')}\n"
                 f"Eligibility: {t.get('eligibility_criteria', '')[:600]}\n"
                 f"Locations: {', '.join(t.get('locations', []))}\n"
@@ -78,6 +79,38 @@ class ClinicalTrialsTool(BaseTool):
 
 pubmed_tool = PubMedTool()
 trials_tool = ClinicalTrialsTool()
+
+
+class ISRCTNInput(BaseModel):
+    query: str = Field(..., description="Condition or search terms for ISRCTN registry")
+
+
+class ISRCTNTool(BaseTool):
+    name: str = "Search ISRCTN"
+    description: str = "Search ISRCTN registry for UK and European clinical trials not listed on ClinicalTrials.gov."
+    args_schema: type[BaseModel] = ISRCTNInput
+
+    def _run(self, query: str) -> str:
+        results = search_isrctn(query=query, max_results=5)
+        if not results:
+            return "No ISRCTN trials found."
+        output = []
+        for t in results:
+            output.append(
+                f"Title: {t.get('title')}\n"
+                f"ISRCTN ID: {t.get('trial_id')}\n"
+                f"Phase: {t.get('phase')}\n"
+                f"Sponsor: {t.get('sponsor')}\n"
+                f"Status: {t.get('status')}\n"
+                f"Countries: {', '.join(t.get('countries', []))}\n"
+                f"Primary Outcome: {t.get('primary_outcome', '')}\n"
+                f"Eligibility: {t.get('eligibility_criteria', '')[:600]}\n"
+                f"URL: {t.get('url')}\n"
+            )
+        return "\n---\n".join(output)
+
+
+isrctn_tool = ISRCTNTool()
 
 def create_agents():
     """Create and return all FARO agents."""
@@ -90,7 +123,7 @@ def create_agents():
             "searching ClinicalTrials.gov. You know how to find trials that match patient "
             "profiles and understand inclusion/exclusion criteria deeply."
         ),
-        tools=[trials_tool],
+        tools=[trials_tool, isrctn_tool],
         llm=claude,
         verbose=True,
         allow_delegation=False,
