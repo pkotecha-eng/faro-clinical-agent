@@ -6,7 +6,7 @@ FARO is a multi-agent AI system that helps patients and caregivers find and unde
 
 FARO uses four specialized CrewAI agents working in sequence:
 
-1. **🔍 Trial Scout** — searches ClinicalTrials.gov for recruiting trials matching the condition
+1. **🔍 Trial Scout** — searches ClinicalTrials.gov and ISRCTN registry for recruiting trials matching the condition
 2. **📚 Literature Researcher** — searches PubMed for the latest peer-reviewed evidence
 3. **✅ Eligibility Specialist** — assesses whether the patient likely qualifies for each trial
 4. **🧭 Patient Navigator** — synthesizes everything into a plain-language report
@@ -27,6 +27,7 @@ FARO uses four specialized CrewAI agents working in sequence:
 - CrewAI 1.14.2 — role-based multi-agent orchestration
 - PubMed API (NCBI E-utilities) — no key required
 - ClinicalTrials.gov API v2 — no key required
+- ISRCTN Registry API — UK/European clinical trials, no key required
 - Python + Streamlit
 
 ## Setup
