@@ -187,7 +187,8 @@ def search_isrctn(query: str, max_results: int = 5) -> list[dict]:
             condition = main.get("hc_freetext") or ""
             searchable = f"{title} {condition}".lower()
 
-            if not all(word in searchable for word in query_words):
+            significant_words = [w for w in query_words if len(w) > 3]
+            if not significant_words or not any(word in searchable for word in significant_words):
                 continue
 
             criteria = trial.get("criteria") or {}

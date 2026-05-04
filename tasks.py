@@ -14,7 +14,7 @@ def create_tasks(agents, condition: str, patient_profile: str, context: str = No
 
     # Task 1 — runs in parallel with Task 2
     find_trials = Task(
-    description=(
+      description=(
         f"Search for recruiting clinical trials for: {condition}.\n"
         f"You have two tools available:\n"
         f"1. Search Clinical Trials — searches ClinicalTrials.gov (US-focused)\n"
@@ -24,17 +24,17 @@ def create_tasks(agents, condition: str, patient_profile: str, context: str = No
         f"- Trial ID (NCT ID or ISRCTN ID), title, phase, sponsor\n"
         f"- Full eligibility criteria (inclusion and exclusion)\n"
         f"- Locations or countries\n"
-        f"- Primary outcome\n"
         f"- URL\n"
+        f"- Primary outcome (what the trial is actually measuring)\n"
         f"Return all trials with complete details, noting which registry each came from."
-    ),
-    expected_output=(
+      ),
+      expected_output=(
         "A detailed list of up to 5 recruiting clinical trials from ClinicalTrials.gov "
         "and/or ISRCTN, with trial IDs, phases, sponsors, eligibility criteria, "
         "locations, primary outcomes, and URLs. Each trial should note its source registry."
-    ),
-    agent=trial_scout,
-)
+      ),
+      agent=trial_scout,
+    )
 
     # Task 2 — runs in parallel with Task 1
     search_literature = Task(
@@ -96,7 +96,7 @@ def create_tasks(agents, condition: str, patient_profile: str, context: str = No
             f"2. WHAT THE RESEARCH SAYS\n"
             f"   Plain-language summary of latest evidence from PubMed\n\n"
             f"3. CLINICAL TRIALS MATCHED\n"
-            f"   Trials ranked by eligibility fit, with NCT IDs and URLs\n\n"
+            f"   Trials ranked by eligibility fit, with trial IDs (NCT or ISRCTN), URLs, and primary outcomes\n\n"
             f"4. ELIGIBILITY ASSESSMENT\n"
             f"   For each trial — rating and key reasons\n\n"
             f"5. QUESTIONS TO ASK YOUR DOCTOR\n"

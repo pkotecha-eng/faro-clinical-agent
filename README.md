@@ -13,13 +13,14 @@ FARO uses four specialized CrewAI agents working in sequence:
 
 ## What the report includes
 
-- Patient summary in plain language
+- Plain-language summary of what the findings mean (no medical jargon)
 - Latest research findings from PubMed
-- Matched trials ranked by eligibility fit with NCT IDs and links
+- Matched trials ranked by eligibility fit with trial IDs (NCT or ISRCTN), primary outcomes, and links
 - Per-trial eligibility assessment with reasoning
 - Questions to ask your doctor
 - Concrete next steps
 - Important disclaimer
+
 
 ## Tech stack
 
@@ -50,7 +51,7 @@ streamlit run app.py
 
 ## Note
 
-For informational purposes only. Always consult your healthcare team before making any medical decisions. Trial eligibility must be confirmed with the trial site.
+Results sourced from ClinicalTrials.gov and ISRCTN (UK/European registry). Some regional or institutional trials may still not be listed. For informational purposes only. Always consult your healthcare team before making any medical decisions. Trial eligibility must be confirmed with the trial site.
 
 ## Built by
 
