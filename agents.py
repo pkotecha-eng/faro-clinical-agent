@@ -124,7 +124,7 @@ def create_agents():
             "profiles and understand inclusion/exclusion criteria deeply."
         ),
         tools=[trials_tool, isrctn_tool],
-        llm=claude,
+        llm=haiku,
         verbose=True,
         allow_delegation=False,
     )
@@ -138,7 +138,7 @@ def create_agents():
             "explain them in plain language that patients and caregivers can understand."
         ),
         tools=[pubmed_tool],
-        llm=claude,
+        llm=haiku,
         verbose=True,
         allow_delegation=False,
     )

@@ -7,26 +7,25 @@ import streamlit as st
 from crew import run_faro
 from datetime import date
 import uuid
-import threading
-import time
+from db import log_session, update_session_report_generated, update_session_downloaded
 
 # ADD SESSION ID SETUP
 if 'session_id' not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 
 # ADD LOGGING FUNCTIONS
-def log_run(condition, patient_type, session_id):
-    with open("faro_runs.log", "a") as f:
-        f.write(f"{date.today()},{session_id},{condition},{patient_type}\n")
+def log_run(condition, patient_profile, patient_type, session_id):
+    # Log to Supabase (persistent)
+    log_session(
+        session_id=session_id,
+        condition=condition,
+        patient_profile=patient_profile,
+        patient_type=patient_type
+    )
 
 def log_download(condition, session_id):
-    with open("faro_downloads.log", "a") as f:
-        f.write(f"{date.today()},{session_id},{condition}\n")
+    update_session_downloaded(session_id)
 
-
-st.html("""
-<script defer data-domain="faro-clinical-agent.fly.dev" src="https://plausible.io/js/script.js"></script>
-""")
 
 st.set_page_config(
     page_title="FARO — Clinical Trial Intelligence",
@@ -102,24 +101,6 @@ def _render_input_form():
 
     return submitted, condition, age, location, treatments_tried, other_info
 
-def _progress_label(i):
-    if i < 25:
-        return "🔍 Trial Scout searching ClinicalTrials.gov..."
-    elif i < 50:
-        return "📚 Literature Researcher scanning PubMed..."
-    elif i < 75:
-        return "🧬 Eligibility Assessor reviewing your profile..."
-    else:
-        return "📝 Patient Care Navigator writing your report..."
-
-
-def _tick_progress(progress_bar, stop_progress):
-    for i in range(1, 92):
-        if stop_progress.is_set():
-            break
-        progress_bar.progress(i, text=_progress_label(i))
-        time.sleep(1.6)
-
 
 def _build_patient_profile(age, location, treatments_tried, other_info):
     parts = []
@@ -144,7 +125,7 @@ if submitted:
     else:
         patient_profile = _build_patient_profile(age, location, treatments_tried, other_info)
 
-        log_run(condition, st.session_state.patient_type, st.session_state.session_id)
+        log_run(condition, patient_profile, st.session_state.patient_type, st.session_state.session_id)
 
         st.divider()
         st.markdown("### 🤖 FARO is working...")
@@ -152,26 +133,13 @@ if submitted:
 
         with st.status("Generating your report...", expanded=True) as status:
             try:
-                st.write("🔍 Searching trials & research...")
                 
-                progress_bar = st.progress(0, text="🔍 Trial Scout searching ClinicalTrials.gov...")
-                stop_progress = threading.Event()
-
-                t = threading.Thread(target=_tick_progress, args=(progress_bar, stop_progress), daemon=True)
-                t.start()
-
                 result = run_faro(
                     condition=condition,
                     patient_profile=patient_profile,
                 )
 
-                stop_progress.set()
-                progress_bar.progress(100, text="✅ All agents complete!")
-                time.sleep(0.5)
-                progress_bar.empty()
 
-
-                st.write("✓ Formatting report...")
                 # Inject date as subheading under the report title
                 lines = result.split('\n')
                 for i, line in enumerate(lines):
@@ -184,22 +152,21 @@ if submitted:
                 result = '\n'.join(lines)
 
                 status.update(label="Report ready!", state="complete")
+                update_session_report_generated(st.session_state.session_id)
                 st.success("✅ Your report is ready!")
                 st.caption("📍 Results sourced from ClinicalTrials.gov and ISRCTN (UK/European registry). Some regional or institutional trials may still not be listed.")
                 st.divider()
                 st.markdown(result)
 
                 st.divider()
-                st.download_button(
+                if st.download_button(
                     label="📄 Download Report as Text",
                     data=result,
                     file_name=f"FARO_report_{condition.replace(' ', '_')}.txt",
                     mime="text/plain",
-                )
+                ):
+                    log_download(condition, st.session_state.session_id)
 
-                log_download(condition, st.session_state.session_id)
-
-                # ... feedback buttons ...
                 st.divider()
                 st.markdown("### Was this report helpful?")
                 col1, col2 = st.columns(2)
