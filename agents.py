@@ -10,7 +10,7 @@ import os
 from dotenv import load_dotenv
 from crewai import Agent, LLM
 
-load_dotenv()
+load_dotenv(override=True)
 
 haiku = LLM(
     model="claude-haiku-4-5-20251001",

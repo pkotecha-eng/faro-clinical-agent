@@ -109,7 +109,10 @@ def create_tasks(agents, condition: str, patient_profile: str, context: str = No
             f"Language rules: Write with empathy, clarity, and hope. "
             f"If a medical term must be used anywhere in the report, define it immediately in plain English in parentheses. "
             f"Section 0 must contain zero medical jargon — no exceptions. "
-            f"This report should be something a patient can print and bring to their doctor."
+            f"This report should be something a patient can print and bring to their doctor.\n\n"
+            f"Keep each section concise — maximum 200 words per section. "
+            f"Do not truncate or omit any of the 8 required sections (0 through 7). "
+            f"All 8 sections must be present and complete."
         ),
         expected_output=(
             "A complete, well-structured patient report with all 8 sections, "

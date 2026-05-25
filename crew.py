@@ -9,7 +9,7 @@ from tasks import create_tasks
 from concurrent.futures import ThreadPoolExecutor
 import os
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(override=True)
 
 os.environ["OPENAI_API_KEY"] = "NA"  # dummy to satisfy checks
 os.environ["ANTHROPIC_API_KEY"] = os.getenv("ANTHROPIC_API_KEY")
