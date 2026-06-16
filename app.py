@@ -40,7 +40,7 @@ def _render_sidebar():
         st.divider()
         st.markdown("""
 **What FARO does:**
-- Searches ClinicalTrials.gov for recruiting trials
+- Searches ClinicalTrials.gov and ISRCTN for recruiting trials
 - Reviews latest PubMed research
 - Assesses your eligibility for each trial
 - Generates a report to bring to your doctor
