@@ -140,6 +140,15 @@ def search_clinical_trials(
                 for loc in locations[:3]
             ]
 
+            criteria_raw = eligibility_module.get("eligibilityCriteria", "")
+            if "Exclusion Criteria:" in criteria_raw:
+                parts = criteria_raw.split("Exclusion Criteria:")
+                inclusion_criteria = parts[0].replace("Inclusion Criteria:", "").strip()[:400]
+                exclusion_criteria = parts[1].strip()[:800]
+            else:
+                inclusion_criteria = criteria_raw[:400]
+                exclusion_criteria = ""
+
             results.append({
                 "nct_id": nct_id,
                 "title": id_module.get("briefTitle", "Untitled"),
@@ -148,7 +157,8 @@ def search_clinical_trials(
                 "sponsor": sponsor_module.get("leadSponsor", {}).get("name", "N/A"),
                 "conditions": ", ".join(conditions_module.get("conditions", [])),
                 "brief_summary": desc_module.get("briefSummary", ""),
-                "eligibility_criteria": eligibility_module.get("eligibilityCriteria", ""),
+                "inclusion_criteria": inclusion_criteria,
+                "exclusion_criteria": exclusion_criteria,
                 "min_age": eligibility_module.get("minimumAge", "N/A"),
                 "max_age": eligibility_module.get("maximumAge", "N/A"),
                 "locations": location_names,
@@ -216,7 +226,8 @@ def search_isrctn(query: str, max_results: int = 5) -> list[dict]:
                 "min_age": criteria.get("agemin", "N/A"),
                 "max_age": criteria.get("agemax", "N/A"),
                 "gender": criteria.get("gender", "N/A"),
-                "eligibility_criteria": (criteria.get("inclusion_criteria") or "")[:400],
+                "inclusion_criteria": (criteria.get("inclusion_criteria") or "")[:400],
+                "exclusion_criteria": (criteria.get("exclusion_criteria") or "")[:800],
                 "url": main.get("url", ""),
             })
 

@@ -70,7 +70,8 @@ class ClinicalTrialsTool(BaseTool):
                 f"Sponsor: {t.get('sponsor')}\n"
                 f"Primary Outcome: {t.get('primary_outcome', '')}\n"
                 f"Status: {t.get('status')}\n"
-                f"Eligibility: {t.get('eligibility_criteria', '')[:600]}\n"
+                f"Inclusion Criteria: {t.get('inclusion_criteria', '')}\n"
+                f"Exclusion Criteria: {t.get('exclusion_criteria', '') or 'Not available'}\n"
                 f"Locations: {', '.join(t.get('locations', []))}\n"
                 f"URL: {t.get('url')}\n"
             )
@@ -104,7 +105,8 @@ class ISRCTNTool(BaseTool):
                 f"Status: {t.get('status')}\n"
                 f"Countries: {', '.join(t.get('countries', []))}\n"
                 f"Primary Outcome: {t.get('primary_outcome', '')}\n"
-                f"Eligibility: {t.get('eligibility_criteria', '')[:600]}\n"
+                f"Inclusion Criteria: {t.get('inclusion_criteria', '')}\n"
+                f"Exclusion Criteria: {t.get('exclusion_criteria', '') or 'Not available'}\n"
                 f"URL: {t.get('url')}\n"
             )
         return "\n---\n".join(output)
