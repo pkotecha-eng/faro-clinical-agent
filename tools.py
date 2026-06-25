@@ -143,7 +143,7 @@ def search_clinical_trials(
             criteria_raw = eligibility_module.get("eligibilityCriteria", "")
             if "Exclusion Criteria:" in criteria_raw:
                 parts = criteria_raw.split("Exclusion Criteria:")
-                inclusion_criteria = parts[0].replace("Inclusion Criteria:", "").strip()[:400]
+                inclusion_criteria = parts[0].replace("Inclusion Criteria:", "").strip()[:600]
                 exclusion_criteria = parts[1].strip()[:800]
             else:
                 inclusion_criteria = criteria_raw[:400]
@@ -226,7 +226,7 @@ def search_isrctn(query: str, max_results: int = 5) -> list[dict]:
                 "min_age": criteria.get("agemin", "N/A"),
                 "max_age": criteria.get("agemax", "N/A"),
                 "gender": criteria.get("gender", "N/A"),
-                "inclusion_criteria": (criteria.get("inclusion_criteria") or "")[:400],
+                "inclusion_criteria": (criteria.get("inclusion_criteria") or "")[:600],
                 "exclusion_criteria": (criteria.get("exclusion_criteria") or "")[:800],
                 "url": main.get("url", ""),
             })
