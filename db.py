@@ -90,3 +90,13 @@ def log_eval_run(condition: str, faro_version: str, scores: dict) -> None:
         }).execute()
     except Exception as e:
         print(f"Eval logging error: {e}")
+
+def update_session_feedback(session_id: str, feedback: str) -> None:
+    """Record user feedback (positive/negative) for a session."""
+    try:
+        client = get_service_client()
+        client.table("faro_sessions").update({
+            "feedback": feedback
+        }).eq("session_id", session_id).execute()
+    except Exception as e:
+        print(f"Feedback update error: {e}")

@@ -7,15 +7,13 @@ import streamlit as st
 from crew import run_faro
 from datetime import date
 import uuid
-from db import log_session, update_session_report_generated, update_session_downloaded
+from db import log_session, update_session_report_generated, update_session_downloaded, update_session_feedback
 
-# ADD SESSION ID SETUP
 if 'session_id' not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
 
-# ADD LOGGING FUNCTIONS
+
 def log_run(condition, patient_profile, patient_type, session_id):
-    # Log to Supabase (persistent)
     log_session(
         session_id=session_id,
         condition=condition,
@@ -124,7 +122,6 @@ if submitted:
         st.error("Please enter a medical condition to search for.")
     else:
         patient_profile = _build_patient_profile(age, location, treatments_tried, other_info)
-
         log_run(condition, patient_profile, st.session_state.patient_type, st.session_state.session_id)
 
         st.divider()
@@ -133,19 +130,16 @@ if submitted:
 
         with st.status("Generating your report...", expanded=True) as status:
             try:
-                
                 result = run_faro(
                     condition=condition,
                     patient_profile=patient_profile,
                 )
-
 
                 # Inject date as subheading under the report title
                 lines = result.split('\n')
                 for i, line in enumerate(lines):
                     if line.startswith('# '):
                         lines.insert(i + 1, f"### {date.today().strftime('%B %d, %Y')}")
-                        # Add disclaimer right after date
                         lines.insert(i + 2, "")
                         lines.insert(i + 3, "> ⚠️ **Educational Information Only** — This report is for informational purposes only and does not constitute medical advice. Always consult your child's healthcare provider before making any treatment decisions. Clinical trial eligibility must be verified directly with trial sites.")
                         break
@@ -153,31 +147,41 @@ if submitted:
 
                 status.update(label="Report ready!", state="complete")
                 update_session_report_generated(st.session_state.session_id)
-                st.success("✅ Your report is ready!")
-                st.caption("📍 Results sourced from ClinicalTrials.gov and ISRCTN (UK/European registry). Some regional or institutional trials may still not be listed.")
-                st.divider()
-                st.markdown(result)
 
-                st.divider()
-                if st.download_button(
-                    label="📄 Download Report as Text",
-                    data=result,
-                    file_name=f"FARO_report_{condition.replace(' ', '_')}.txt",
-                    mime="text/plain",
-                ):
-                    log_download(condition, st.session_state.session_id)
-
-                st.divider()
-                st.markdown("### Was this report helpful?")
-                col1, col2 = st.columns(2)
-                with col1:
-                     if st.button("👍 Yes, useful"):
-                        st.success("Thank you! Your feedback helps improve FARO.")
-                with col2:
-                     if st.button("👎 Could be better"):
-                        st.info("We'd love to know how to improve. Email feedback to pkotecha@gmail.com")
-                
+                st.session_state.report_result = result
+                st.session_state.report_condition = condition
 
             except Exception as e:
                 status.update(label="Error occurred", state="error")
                 st.error(f"Something went wrong: {e}. Please try again.")
+
+# Outside if submitted — persists across rerenders triggered by download/feedback buttons
+if 'report_result' in st.session_state:
+    result = st.session_state.report_result
+    condition = st.session_state.report_condition
+
+    st.success("✅ Your report is ready!")
+    st.caption("📍 Results sourced from ClinicalTrials.gov and ISRCTN (UK/European registry). Some regional or institutional trials may still not be listed.")
+    st.divider()
+    st.markdown(result)
+
+    st.divider()
+    if st.download_button(
+        label="📄 Download Report as Text",
+        data=result,
+        file_name=f"FARO_report_{condition.replace(' ', '_')}.txt",
+        mime="text/plain",
+    ):
+        log_download(condition, st.session_state.session_id)
+
+    st.divider()
+    st.markdown("### Was this report helpful?")
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("👍 Yes, useful"):
+            update_session_feedback(st.session_state.session_id, "positive")
+            st.success("Thank you! Your feedback helps improve FARO.")
+    with col2:
+        if st.button("👎 Could be better"):
+            update_session_feedback(st.session_state.session_id, "negative")
+            st.info("We'd love to know how to improve. Email feedback to pkotecha@gmail.com")
