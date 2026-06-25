@@ -7,7 +7,7 @@ from crewai import Task
 from datetime import date
 
 
-def create_tasks(agents, condition: str, patient_profile: str, context: str = None):
+def create_tasks(agents, condition: str, patient_profile: str, context: str = None, age: str = None):
     """Create and return all FARO tasks."""
 
     trial_scout, literature_agent, eligibility_assessor, synthesizer = agents
@@ -61,14 +61,20 @@ def create_tasks(agents, condition: str, patient_profile: str, context: str = No
     assess_eligibility = Task(
         description=(
             f"Based on the clinical trials found, assess eligibility for this patient:\n\n"
-            f"Patient Profile: {patient_profile}\n\n"
+            f"PATIENT AGE: {age if age else 'Unknown'}\n"
+            f"THIS IS CRITICAL — check every trial's minimum and maximum age requirement "
+            f"against this age first. If the patient's age falls outside the trial's age range, "
+            f"rate Likely Ineligible immediately.\n\n"
+            f"Full Patient Profile: {patient_profile}\n\n"
             f"Trial and literature context:\n{context_text}\n\n"
             f"For each trial:\n"
             f"1. State the trial ID (NCT ID or ISRCTN ID) and trial title\n"
-            f"2. List key inclusion criteria and whether this patient likely meets them\n"
-            f"3. List key exclusion criteria and flag any potential disqualifiers\n"
-            f"4. Rate eligibility: Likely Eligible / Possibly Eligible / Likely Ineligible\n"
-            f"5. Explain your reasoning in plain language\n\n"
+            f"2. Check age criteria first — if the trial's minimum or maximum age excludes "
+            f"this patient, rate the trial Likely Ineligible immediately regardless of other criteria.\n"
+            f"3. List key inclusion criteria and whether this patient likely meets them\n"
+            f"4. List key exclusion criteria and flag any potential disqualifiers\n"
+            f"5. Rate eligibility: Likely Eligible / Possibly Eligible / Likely Ineligible\n"
+            f"6. Explain your reasoning in plain language\n\n"
             f"AGE IS A HARD EXCLUSION CRITERION. If the trial specifies a minimum age "
             f"(e.g. '18 years and older', 'adults only') and the patient is younger than "
             f"that minimum, rate the trial as Likely Ineligible regardless of other factors. "

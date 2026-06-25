@@ -15,7 +15,7 @@ os.environ["OPENAI_API_KEY"] = "NA"  # dummy to satisfy checks
 os.environ["ANTHROPIC_API_KEY"] = os.getenv("ANTHROPIC_API_KEY")
 
 
-def run_faro(condition: str, patient_profile: str) -> str:
+def run_faro(condition: str, patient_profile: str, age: str = None) -> str:
     agents = create_agents()
     trial_scout, literature_agent, eligibility_assessor, synthesizer = agents
 
@@ -23,6 +23,7 @@ def run_faro(condition: str, patient_profile: str) -> str:
         agents=agents,
         condition=condition,
         patient_profile=patient_profile,
+        age=age,
     )
 
     # Run Trial Scout and Literature Researcher in parallel
@@ -44,6 +45,7 @@ def run_faro(condition: str, patient_profile: str) -> str:
         condition=condition,
         patient_profile=patient_profile,
         context=combined_context,
+        age=age,
     )
 
     crew = Crew(

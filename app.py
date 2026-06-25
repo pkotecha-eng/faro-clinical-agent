@@ -103,7 +103,8 @@ def _render_input_form():
 def _build_patient_profile(age, location, treatments_tried, other_info):
     parts = []
     if age:
-        parts.append(f"Age: {age}")
+        age_clean = ''.join(filter(str.isdigit, age.strip()))
+        parts.append(f"Age: {age} (pediatric patient)" if age_clean and int(age_clean) < 18 else f"Age: {age}")
     if location:
         parts.append(f"Location: {location}")
     if treatments_tried:
@@ -133,6 +134,7 @@ if submitted:
                 result = run_faro(
                     condition=condition,
                     patient_profile=patient_profile,
+                    age=age,
                 )
 
                 # Inject date as subheading under the report title
