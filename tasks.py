@@ -98,6 +98,13 @@ def create_tasks(agents, condition: str, patient_profile: str, context: str = No
     synthesize_report = Task(
         description=(
             f"Today's date is {date.today().strftime('%B %d, %Y')}. Use this as the report date.\n\n"
+            f"THIS REPORT IS FOR A SPECIFIC PATIENT:\n"
+            f"PATIENT AGE: {age if age else 'Unknown'}\n"
+            f"Patient Profile: {patient_profile}\n\n"
+            f"RANKING RULE: In section 3, rank trials ONLY by eligibility fit for this specific patient. "
+            f"A trial with a minimum age of 18 is NOT a match for a pediatric patient and must be ranked below "
+            f"any pediatric-eligible trial. Do not rank trials by how broadly they accept the general population — "
+            f"rank them by fit for THIS patient. Follow the eligibility assessor's ratings strictly.\n\n"
             f"Create a comprehensive, compassionate patient report combining all findings.\n\n"
             + (f"Context from parallel research:\n{context_text}\n\n" if context else "")
             + f"Structure the report as follows:\n\n"
@@ -110,9 +117,11 @@ def create_tasks(agents, condition: str, patient_profile: str, context: str = No
             f"2. WHAT THE RESEARCH SAYS\n"
             f"   Plain-language summary of latest evidence from PubMed\n\n"
             f"3. CLINICAL TRIALS MATCHED\n"
-            f"   Trials ranked by eligibility fit, with trial IDs (NCT or ISRCTN), URLs, and primary outcomes\n\n"
+            f"   Trials ranked by eligibility fit for THIS patient, with trial IDs (NCT or ISRCTN), URLs, and primary outcomes. "
+            f"   Trials where the patient's age falls outside the age range must be ranked last and clearly marked as age-ineligible.\n\n"
             f"4. ELIGIBILITY ASSESSMENT\n"
-            f"   For each trial — rating and key reasons\n\n"
+            f"   For each trial — rating and key reasons. For trials where the patient's age disqualifies them, "
+            f"   state clearly: 'Patient does not meet the age requirement for this trial.'\n\n"
             f"5. QUESTIONS TO ASK YOUR DOCTOR\n"
             f"   3-5 specific questions based on the findings\n\n"
             f"6. NEXT STEPS\n"
