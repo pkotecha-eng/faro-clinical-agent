@@ -35,11 +35,12 @@
 11. [Web Application (`app.py`)](#11-web-application-apppy)
 12. [Database Layer (`db.py`)](#12-database-layer-dbpy)
 13. [Evaluation Framework (`eval/`)](#13-evaluation-framework-eval)
-14. [Error Handling](#14-error-handling)
-15. [Rate Limits & Constraints](#15-rate-limits--constraints)
-16. [Deployment](#16-deployment)
-17. [Dependencies](#17-dependencies)
-18. [Environment Variables](#18-environment-variables)
+14. [Hallucination Prevention](#14-hallucination-prevention)
+15. [Error Handling](#15-error-handling)
+16. [Rate Limits & Constraints](#16-rate-limits--constraints)
+17. [Deployment](#17-deployment)
+18. [Dependencies](#18-dependencies)
+19. [Environment Variables](#19-environment-variables)
 
 ---
 
@@ -162,16 +163,17 @@ python crew.py
 
 ## 4. Orchestration (`crew.py`)
 
-`run_faro(condition, patient_profile)` is the single public entry point. It wires together agents, tasks, and execution strategy.
+`run_faro(condition, patient_profile, age)` is the single public entry point. It wires together agents, tasks, and execution strategy.
 
 ```python
-def run_faro(condition: str, patient_profile: str) -> str
+def run_faro(condition: str, patient_profile: str, age: str = None) -> str
 ```
 
-| Parameter        | Type  | Description                                       |
-|------------------|-------|---------------------------------------------------|
-| `condition`      | `str` | Medical condition or diagnosis                    |
-| `patient_profile`| `str` | Assembled patient context string                  |
+| Parameter        | Type  | Description                                                        |
+|------------------|-------|--------------------------------------------------------------------|
+| `condition`      | `str` | Medical condition or diagnosis                                     |
+| `patient_profile`| `str` | Assembled patient context string                                   |
+| `age`            | `str` | Patient age as entered by user (e.g. "12", "12 years old"). Passed explicitly as a separate parameter — not parsed from `patient_profile` — to ensure the eligibility assessor and synthesizer both receive it reliably. |
 
 **Returns:** Complete report as a markdown-formatted string.
 
@@ -214,10 +216,12 @@ The synthesizer's output becomes the final report returned to `app.py`.
 
 All agents are constructed by `create_agents()` using `crewai.Agent`. Two LLM tiers are used:
 
-| LLM handle | Model ID                     | Used by                        |
-|------------|------------------------------|--------------------------------|
-| `claude`   | `claude-sonnet-4-5`          | All four agents                |
-| `haiku`    | `claude-haiku-4-5-20251001`  | Defined, not currently assigned|
+| LLM handle | Model ID                     | Used by                                     |
+|------------|------------------------------|---------------------------------------------|
+| `haiku`    | `claude-haiku-4-5-20251001`  | Trial Scout, Literature Researcher (retrieval agents) |
+| `claude`   | `claude-sonnet-4-5`          | Eligibility Assessor, Synthesizer (reasoning agents)  |
+
+Haiku is used for the two retrieval agents because their task is tool-call + formatting, not complex reasoning. Sonnet is reserved for the two agents that require multi-step clinical judgment.
 
 All agents have `allow_delegation=False` (no inter-agent tool handoff).
 
@@ -230,7 +234,7 @@ Agent(
     role="Clinical Trial Scout",
     goal="Find the most relevant recruiting clinical trials for the patient's condition",
     tools=[trials_tool, isrctn_tool],   # ClinicalTrialsTool + ISRCTNTool
-    llm=claude,
+    llm=haiku,
 )
 ```
 
@@ -247,7 +251,7 @@ Agent(
     role="Medical Literature Researcher",
     goal="Find and summarize the latest published evidence for the patient's condition",
     tools=[pubmed_tool],   # PubMedTool
-    llm=claude,
+    llm=haiku,
 )
 ```
 
@@ -293,7 +297,7 @@ Agent(
 
 ## 6. Tasks (`tasks.py`)
 
-All tasks are constructed by `create_tasks(agents, condition, patient_profile, context=None)`.
+All tasks are constructed by `create_tasks(agents, condition, patient_profile, context=None, age=None)`.
 
 `context` is `None` in Phase 1 (parallel) and a pre-built `combined_context` string in Phase 2 (sequential). This switches between two wiring modes:
 
@@ -347,13 +351,25 @@ All tasks are constructed by `create_tasks(agents, condition, patient_profile, c
 **Context source:** `combined_context` string (trials + literature results from Phase 1)
 
 **Description instructs the agent to:**
-For each trial found:
+
+The task description begins with explicit patient age injection:
+```
+PATIENT AGE: {age}
+THIS IS CRITICAL — check every trial's minimum and maximum age requirement
+against this age first. If the patient's age falls outside the trial's age range,
+rate Likely Ineligible immediately.
+```
+
+For each trial:
 1. State the trial ID and title
-2. List key inclusion criteria and whether the patient likely meets them
-3. List key exclusion criteria and flag any potential disqualifiers
-4. Rate eligibility: **Likely Eligible** / **Possibly Eligible** / **Likely Ineligible**
-5. Explain reasoning in plain language
-6. Always note that final eligibility must be confirmed with the trial site
+2. **Check age criteria first** — if min/max age excludes the patient, rate Likely Ineligible immediately regardless of other criteria
+3. List key inclusion criteria and whether the patient likely meets them
+4. List key exclusion criteria and flag any potential disqualifiers
+5. Rate eligibility: **Likely Eligible** / **Possibly Eligible** / **Likely Ineligible**
+6. Explain reasoning in plain language
+7. Always note that final eligibility must be confirmed with the trial site
+
+**Unknown-data instruction (Layer 2 hallucination prevention):** If a criterion requires lab values, medication dates, or clinical measurements not present in the patient profile, the agent must state that explicitly and default to **Possibly Eligible** rather than assuming the patient meets it.
 
 **Expected output:**
 > Eligibility assessment for each trial with ratings and plain-language reasoning.
@@ -367,11 +383,28 @@ For each trial found:
 **Runs:** Sequential Phase (last — receives Task 3's output via CrewAI context)
 
 **Description instructs the agent to:**
-Produce a full structured report with the sections below. Language rules are embedded in the task description:
+
+The task description begins with explicit patient identity injection:
+```
+THIS REPORT IS FOR A SPECIFIC PATIENT:
+PATIENT AGE: {age}
+Patient Profile: {patient_profile}
+
+RANKING RULE: In section 3, rank trials ONLY by eligibility fit for this specific patient.
+A trial with a minimum age of 18 is NOT a match for a pediatric patient and must be ranked
+below any pediatric-eligible trial. Do not rank trials by how broadly they accept the general
+population — rank them by fit for THIS patient. Follow the eligibility assessor's ratings strictly.
+```
+
+Language rules embedded in the task description:
 - Define any medical term used, immediately in plain English in parentheses
 - Section 0 must contain **zero medical jargon** — no exceptions
 - Write with empathy, clarity, and hope
-- Today's date is injected into the task description at runtime (`date.today().strftime('%B %d, %Y')`)
+- Today's date is injected at runtime (`date.today().strftime('%B %d, %Y')`)
+- Maximum 200 words per section
+- All 8 sections must be present and complete — no truncation
+
+**Why patient age is injected here:** The synthesizer receives the eligibility assessor's output via CrewAI sequential context, but only as prose. Without explicit age in its own task description, the synthesizer re-reads raw trial data and re-ranks by general population breadth (how broad a trial's criteria are) rather than fit for the specific patient. Injecting age and the ranking rule prevents this.
 
 **Expected output:**
 > Complete well-structured patient report with all 8 sections (0–7), in plain language a patient can bring to their doctor.
@@ -422,6 +455,23 @@ class ClinicalTrialsTool(BaseTool):
 
 **Returns:** Formatted string of up to 5 trials; `"No trials found."` on empty result.
 
+**Output format per trial:**
+```
+Title: ...
+NCT ID: ...
+Phase: ...
+Sponsor: ...
+Primary Outcome: ...
+Status: ...
+Age Range: {min_age} to {max_age}
+Inclusion Criteria: ...
+Exclusion Criteria: ...
+Locations: ...
+URL: ...
+```
+
+`Age Range` is a separate explicit field so the eligibility assessor can perform hard age checks without parsing prose.
+
 ---
 
 ### 7.3 `ISRCTNTool`
@@ -442,6 +492,21 @@ class ISRCTNTool(BaseTool):
 **Calls:** `tools.search_isrctn(query=query, max_results=5)`
 
 **Returns:** Formatted string of up to 5 trials; `"No ISRCTN trials found."` on empty result.
+
+**Output format per trial:**
+```
+Title: ...
+ISRCTN ID: ...
+Phase: ...
+Sponsor: ...
+Status: ...
+Countries: ...
+Age Range: {min_age} to {max_age}
+Primary Outcome: ...
+Inclusion Criteria: ...
+Exclusion Criteria: ...
+URL: ...
+```
 
 ---
 
@@ -503,7 +568,7 @@ GET efetch.fcgi?db=pubmed&id=<comma-sep PMIDs>&retmode=xml
 | `statusModule`                  | `overallStatus`                                                               |
 | `designModule`                  | `phases` (list, joined as `", "`)                                             |
 | `descriptionModule`             | `briefSummary`                                                                |
-| `eligibilityModule`             | `eligibilityCriteria` (first 600 chars shown to agent), `minimumAge`, `maximumAge`|
+| `eligibilityModule`             | `eligibilityCriteria` — split into `inclusion_criteria` (≤600 chars) and `exclusion_criteria` (≤800 chars); `minimumAge`, `maximumAge` |
 | `sponsorCollaboratorsModule`    | `leadSponsor.name`                                                            |
 | `conditionsModule`              | `conditions` (joined)                                                         |
 | `contactsLocationsModule`       | `locations[]` — first 3 as `"city, country"` strings                         |
@@ -540,12 +605,28 @@ if not any(word in searchable for word in significant_words):
 | `main.url`                      | `url`                      |                           |
 | `primary_outcome.prim_outcome`  | `primary_outcome`          | Truncated to 300 chars    |
 | `countries.country2`            | `countries`                | List or str normalised    |
-| `criteria.inclusion_criteria`   | `eligibility_criteria`     | Truncated to 400 chars    |
+| `criteria.inclusion_criteria`   | `inclusion_criteria`       | Truncated to 600 chars    |
+| `criteria.exclusion_criteria`   | `exclusion_criteria`       | Truncated to 800 chars    |
 | `criteria.agemin`               | `min_age`                  |                           |
 | `criteria.agemax`               | `max_age`                  |                           |
 | `criteria.gender`               | `gender`                   |                           |
 
-**Over-fetch:** The API is called with `limit = max_results * 2` to ensure enough results survive the relevance filter.
+**Eligibility criteria split:** The CT.gov API returns `eligibilityCriteria` as a single text block. FARO splits it at the `"Exclusion Criteria:"` boundary:
+
+```python
+criteria_raw = eligibility_module.get("eligibilityCriteria", "")
+if "Exclusion Criteria:" in criteria_raw:
+    parts = criteria_raw.split("Exclusion Criteria:")
+    inclusion_criteria = parts[0].replace("Inclusion Criteria:", "").strip()[:600]
+    exclusion_criteria = parts[1].strip()[:800]
+else:
+    inclusion_criteria = criteria_raw[:600]
+    exclusion_criteria = ""
+```
+
+Budget rationale: exclusion criteria truncation is more dangerous than inclusion truncation (missing an exclusion criterion causes a false Likely Eligible rating), so exclusion gets a larger budget (800 vs 600 chars).
+
+**Over-fetch:** The ISRCTN API is called with `limit = max_results * 2` to ensure enough results survive the relevance filter.
 
 ---
 
@@ -575,9 +656,10 @@ if not any(word in searchable for word in significant_words):
     "sponsor":              str,        # Lead sponsor name
     "conditions":           str,        # Comma-joined condition list
     "brief_summary":        str,        # Full brief summary
-    "eligibility_criteria": str,        # Full eligibility text (truncated to 600 in wrapper)
-    "min_age":              str,
-    "max_age":              str,
+    "inclusion_criteria":   str,        # Truncated to 600 chars
+    "exclusion_criteria":   str,        # Truncated to 800 chars
+    "min_age":              str,        # e.g. "18 Years"
+    "max_age":              str,        # e.g. "75 Years"
     "locations":            list[str],  # First 3: "city, country"
     "url":                  str,        # https://clinicaltrials.gov/study/<nct_id>
     "primary_outcome":      str,        # Truncated to 300 chars
@@ -600,7 +682,8 @@ if not any(word in searchable for word in significant_words):
     "min_age":              str,
     "max_age":              str,
     "gender":               str,
-    "eligibility_criteria": str,        # Inclusion criteria, truncated to 400 chars
+    "inclusion_criteria":   str,        # Truncated to 600 chars
+    "exclusion_criteria":   str,        # Truncated to 800 chars
     "url":                  str,
 }
 ```
@@ -616,8 +699,8 @@ The synthesizer (Task 4) is instructed to produce a report with exactly 8 sectio
 | 0 | WHAT THIS MEANS FOR YOU        | 3–4 sentence plain-English summary. **Zero medical jargon.** Patient-first. |
 | 1 | PATIENT SUMMARY                | Brief restatement of the patient's situation                              |
 | 2 | WHAT THE RESEARCH SAYS         | Plain-language PubMed findings summary                                    |
-| 3 | CLINICAL TRIALS MATCHED        | Trials ranked by eligibility fit, with IDs, URLs, primary outcomes        |
-| 4 | ELIGIBILITY ASSESSMENT         | Per-trial rating + key reasons                                            |
+| 3 | CLINICAL TRIALS MATCHED        | Trials ranked by eligibility fit **for this specific patient**, with IDs, URLs, primary outcomes. Age-ineligible trials ranked last and marked explicitly. |
+| 4 | ELIGIBILITY ASSESSMENT         | Per-trial rating + key reasons. Trials where patient's age disqualifies them must state: "Patient does not meet the age requirement." |
 | 5 | QUESTIONS TO ASK YOUR DOCTOR   | 3–5 specific questions based on the findings                              |
 | 6 | NEXT STEPS                     | Concrete actions the patient can take                                     |
 | 7 | IMPORTANT DISCLAIMER           | Informational use only; consult healthcare team                           |
@@ -638,37 +721,51 @@ Page load
 
 User fills form + clicks "Generate My Report"
   → _build_patient_profile() assembles patient_profile string
-  → log_session() → Supabase (condition, patient_type, session_id)
-  → run_faro(condition, patient_profile) [blocking; 2–3 min]
+  → log_session() → Supabase (condition, patient_profile, patient_type, session_id)
+  → run_faro(condition, patient_profile, age) [blocking; 2–3 min]
   → update_session_report_generated(session_id) → Supabase
-  → Report rendered as markdown
-  → Download button renders (txt file)
-  → log_download() on click → Supabase
+  → st.session_state.report_result = result  (persists across rerenders)
+  → st.session_state.report_condition = condition
+
+Report is rendered OUTSIDE the "if submitted:" block
+  → reads from st.session_state so it survives download button / feedback button clicks
+  → Download button: log_download() gated on st.download_button() return value
+  → Feedback buttons: update_session_feedback(session_id, "positive"/"negative") → Supabase
 ```
+
+> **Rerender persistence:** Streamlit reruns the entire script on every widget interaction. If the report were rendered inside `if submitted:`, clicking the download button would wipe it. Storing the result in `st.session_state` and rendering it at the top level keeps it visible after any interaction.
 
 ### Form fields
 
-| Field                              | Streamlit widget   | Maps to                               |
-|------------------------------------|--------------------|---------------------------------------|
-| Medical condition or diagnosis *   | `text_input`       | `condition` (required)                |
-| Age                                | `text_input`       | `patient_profile` part                |
-| Location (optional)                | `text_input`       | `patient_profile` part                |
-| Treatments already tried           | `text_area`        | `patient_profile` part                |
-| Other relevant medical information | `text_area`        | `patient_profile` part                |
-| Real situation / Testing the tool  | `radio`            | `patient_type` (logged to Supabase)   |
+| Field                              | Streamlit widget   | Maps to                                                    |
+|------------------------------------|--------------------|------------------------------------------------------------|
+| Medical condition or diagnosis *   | `text_input`       | `condition` (required)                                     |
+| Age                                | `text_input`       | `age` param + `patient_profile` part (with pediatric label)|
+| Location (optional)                | `text_input`       | `patient_profile` part                                     |
+| Treatments already tried           | `text_area`        | `patient_profile` part                                     |
+| Other relevant medical information | `text_area`        | `patient_profile` part                                     |
+| Real situation / Testing the tool  | `radio`            | `patient_type` (logged to Supabase)                        |
 
 ### `_build_patient_profile`
 
-Assembles the `patient_profile` string from optional fields:
+Assembles the `patient_profile` string from optional fields. Applies pediatric detection to the age field:
 
 ```python
 parts = []
-if age:             parts.append(f"Age: {age}")
-if location:        parts.append(f"Location: {location}")
-if treatments_tried:parts.append(f"Treatments tried: {treatments_tried}")
-if other_info:      parts.append(f"Additional information: {other_info}")
+if age:
+    age_clean = ''.join(filter(str.isdigit, age.strip()))
+    parts.append(
+        f"Age: {age} (pediatric patient)"
+        if age_clean and int(age_clean) < 18
+        else f"Age: {age}"
+    )
+if location:         parts.append(f"Location: {location}")
+if treatments_tried: parts.append(f"Treatments tried: {treatments_tried}")
+if other_info:       parts.append(f"Additional information: {other_info}")
 return ". ".join(parts) or "No additional profile information provided."
 ```
+
+`filter(str.isdigit, ...)` extracts numeric chars before the `< 18` check, so inputs like `"12"`, `"12 years old"`, and `"12yo"` all work correctly without raising a `ValueError`.
 
 ---
 
@@ -678,14 +775,15 @@ Supabase is used for **session telemetry** and **eval run logging**. Connection 
 
 ### `faro_sessions` table
 
-| Column              | Type      | Set when                                |
-|---------------------|-----------|-----------------------------------------|
-| `session_id`        | `uuid`    | Page load (uuid4)                       |
-| `condition`         | `text`    | Form submit                             |
-| `patient_profile`   | `text`    | Form submit (empty string, not used)    |
-| `patient_type`      | `text`    | Form submit radio value                 |
-| `report_generated`  | `bool`    | `update_session_report_generated()`     |
-| `report_downloaded` | `bool`    | `update_session_downloaded()`           |
+| Column              | Type      | Set when                                              |
+|---------------------|-----------|-------------------------------------------------------|
+| `session_id`        | `uuid`    | Page load (uuid4)                                     |
+| `condition`         | `text`    | Form submit                                           |
+| `patient_profile`   | `text`    | Form submit (full assembled profile string)           |
+| `patient_type`      | `text`    | Form submit radio value                               |
+| `report_generated`  | `bool`    | `update_session_report_generated()`                   |
+| `report_downloaded` | `bool`    | `update_session_downloaded()`                         |
+| `feedback`          | `text`    | `update_session_feedback()` — `"positive"` or `"negative"` |
 
 ### `faro_eval_runs` table
 
@@ -770,11 +868,39 @@ result["passed"] = (
 }
 ```
 
-> **Note:** `run_eval.py` line 103 currently hard-filters to `tc_004` only: `test_cases = [tc for tc in test_cases if tc["id"] in ("tc_004")]`. Remove or adjust this filter to run all cases.
+> **Note:** `run_eval.py` line 103 filter is commented out — all 4 test cases run by default.
 
 ---
 
-## 14. Error Handling
+## 14. Hallucination Prevention
+
+FARO uses a two-layer architecture to reduce false eligibility ratings:
+
+### Layer 1 — Structural (split eligibility fields)
+
+The CT.gov `eligibilityCriteria` block is split at parse time into `inclusion_criteria` and `exclusion_criteria` as separate fields. Both are surfaced explicitly in the agent's tool output with independent character budgets (600 inclusion / 800 exclusion). This makes it structurally impossible for the agent to see only half the eligibility picture due to a single flat truncation.
+
+The `min_age` and `max_age` fields from the API are also surfaced as a dedicated `Age Range:` line in tool output — not buried inside the eligibility prose — so age-based exclusions are immediately machine-readable.
+
+### Layer 2 — Semantic (prompt engineering)
+
+Three prompt-level constraints are applied to the eligibility assessor:
+
+1. **Age hard-filter first:** The task description leads with the patient's age and instructs the agent to check min/max age before any other criteria. If age fails, the trial is rated Likely Ineligible immediately — no further analysis.
+
+2. **Unknown-data default:** If a criterion requires lab values, medication dates, or clinical measurements not in the patient profile, the agent must state that explicitly and default to **Possibly Eligible** rather than assuming the patient qualifies.
+
+3. **Verdict-after-reasoning structure:** The task format asks the agent to list criteria first, then give a rating — not the reverse. This reduces anchoring (starting from a verdict and working backwards).
+
+The synthesizer also receives explicit patient age and a ranking rule in its task description, preventing it from re-ranking trials by general population breadth instead of patient-specific fit.
+
+### Layer 3 — Verification (structured output + eval)
+
+Not yet implemented. Would require `TrialResult` Pydantic output schemas for the eligibility assessor, enforcing verdict categories as an enum. Eval checks would then validate that age-ineligible trials are never rated Likely or Possibly Eligible for out-of-range patients.
+
+---
+
+## 15. Error Handling
 
 ### Data layer (`tools.py`)
 
@@ -799,7 +925,7 @@ All Supabase operations catch `Exception`, print to stdout, and return empty def
 
 ---
 
-## 15. Rate Limits & Constraints
+## 16. Rate Limits & Constraints
 
 | Source                | Rate limit                       | Auth required | `max_results` cap |
 |-----------------------|----------------------------------|---------------|-------------------|
@@ -814,7 +940,7 @@ All tool wrappers hard-code `max_results=5`. The underlying `tools.py` functions
 
 ---
 
-## 16. Deployment
+## 17. Deployment
 
 ### Docker
 
@@ -863,7 +989,7 @@ fly secrets set SUPABASE_KEY=your_key
 
 ---
 
-## 17. Dependencies
+## 18. Dependencies
 
 | Package          | Role                                                          |
 |------------------|---------------------------------------------------------------|
@@ -878,7 +1004,7 @@ fly secrets set SUPABASE_KEY=your_key
 
 ---
 
-## 18. Environment Variables
+## 19. Environment Variables
 
 | Variable          | Required | Used by          | Description                              |
 |-------------------|----------|------------------|------------------------------------------|
@@ -892,26 +1018,27 @@ fly secrets set SUPABASE_KEY=your_key
 ## Appendix: Full Data Flow — Single User Request
 
 ```
-User submits form: condition="Prader-Willi Syndrome", age="12", location="New York"
+User submits form: condition="Type 2 Diabetes", age="12", location="Los Angeles"
         │
         ▼ app.py
-        │  _build_patient_profile() → "Age: 12. Location: New York. Treatments tried: ..."
-        │  log_session() → Supabase
-        │  run_faro(condition, patient_profile)
+        │  _build_patient_profile() → "Age: 12 (pediatric patient). Location: Los Angeles."
+        │  log_session(condition, patient_profile, patient_type) → Supabase
+        │  run_faro(condition, patient_profile, age="12")
         │
-        ▼ crew.py → create_agents() + create_tasks()
+        ▼ crew.py → create_agents() + create_tasks(age="12")
         │
         │  ┌─────────────────────── PARALLEL ────────────────────────┐
         │  │                                                          │
-        │  │  Thread A                          Thread B              │
+        │  │  Thread A (haiku)                  Thread B (haiku)      │
         │  │  Trial Scout                       Literature Agent      │
         │  │  → ClinicalTrialsTool._run()       → PubMedTool._run()   │
         │  │    tools.search_clinical_trials()    tools.search_pubmed()│
         │  │    GET clinicaltrials.gov/api/v2     GET eutils esearch   │
-        │  │    → 5 trials (JSON)                 GET eutils efetch    │
-        │  │  → ISRCTNTool._run()                 → 5 papers (XML)    │
-        │  │    tools.search_isrctn()                                 │
-        │  │    GET isrctn.com/api/query           ← lit_result str   │
+        │  │    split inclusion/exclusion         GET eutils efetch    │
+        │  │    Age Range: 10-17 visible          → 5 papers (XML)    │
+        │  │  → ISRCTNTool._run()                                     │
+        │  │    tools.search_isrctn()             ← lit_result str    │
+        │  │    GET isrctn.com/api/query                               │
         │  │    relevance filter                                       │
         │  │  ← trials_result str                                     │
         │  └──────────────────────────────────────────────────────────┘
@@ -920,12 +1047,18 @@ User submits form: condition="Prader-Willi Syndrome", age="12", location="New Yo
         │
         │  ┌───────────────────── SEQUENTIAL ─────────────────────────┐
         │  │                                                           │
-        │  │  Eligibility Assessor                                     │
-        │  │  reads combined_context from task description             │
-        │  │  → per-trial ratings: Likely / Possibly / Ineligible      │
+        │  │  Eligibility Assessor (sonnet)                            │
+        │  │  task description: PATIENT AGE: 12                        │
+        │  │  reads Age Range from each trial in combined_context      │
+        │  │  → adult-only trials: Likely Ineligible immediately        │
+        │  │  → NCT06739122 (age 10-17): assesses other criteria       │
         │  │                                                           │
-        │  │  Patient Navigator (Synthesizer)                          │
-        │  │  reads eligibility output via CrewAI context chaining     │
+        │  │  Patient Navigator / Synthesizer (sonnet)                 │
+        │  │  task description: PATIENT AGE: 12, patient_profile       │
+        │  │  RANKING RULE: rank by fit for THIS patient               │
+        │  │  reads eligibility output via CrewAI sequential context   │
+        │  │  → section 3: pediatric trial ranked #1                   │
+        │  │  → adult trials ranked last, marked AGE INELIGIBLE        │
         │  │  → 8-section markdown report                              │
         │  └───────────────────────────────────────────────────────────┘
         │
@@ -934,8 +1067,10 @@ User submits form: condition="Prader-Willi Syndrome", age="12", location="New Yo
         ▼ app.py
         │  inject date + disclaimer blockquote
         │  update_session_report_generated() → Supabase
-        │  st.markdown(report)
-        │  Download button → log_download() → Supabase
+        │  st.session_state.report_result = report
+        │  [rendered outside if submitted: — persists on rerender]
+        │  Download button → update_session_downloaded() → Supabase
+        │  👍/👎 buttons → update_session_feedback("positive"/"negative") → Supabase
 ```
 
 ---
