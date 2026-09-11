@@ -1,0 +1,56 @@
+[
+  {
+    "id": "tc_001",
+    "condition": "Pediatric Epilepsy",
+    "age": "8 years old",
+    "location": "New York",
+    "treatments_tried": "Levetiracetam, valproate — both failed to control seizures",
+    "other_info": "Drug-resistant focal epilepsy, EEG confirmed, no structural abnormality on MRI",
+    "patient_type": "Testing the tool"
+  },  
+  {
+      "id": "tc_002",
+      "condition": "Beta Thalassemia",
+      "age": "28 years old",
+      "location": "New Jersey",
+      "treatments_tried": "Regular blood transfusions, deferasirox for iron chelation",
+      "other_info": "Beta thalassemia major, considering gene therapy options",
+      "patient_type": "Testing the tool"
+    },
+    {
+      "id": "tc_003",
+      "condition": "Classic Congenital Adrenal Hyperplasia",
+      "age": "6 years old",
+      "location": "New York",
+      "treatments_tried": "Hydrocortisone, fludrocortisone",
+      "other_info": "Classic salt-wasting form, recently diagnosed",
+      "patient_type": "Testing the tool"
+    },
+    {
+      "id": "tc_004",
+      "condition": "Prader-Willi Syndrome",
+      "age": "12 years old",
+      "location": "New York",
+      "treatments_tried": "Growth hormone therapy",
+      "other_info": "Hyperphagia and obesity management primary concern, genetic diagnosis confirmed",
+      "patient_type": "Testing the tool"
+    },
+    {
+      "id": "tc_005",
+      "condition": "Classic Congenital Adrenal Hyperplasia",
+      "age": "10 months old",
+      "location": "New York",
+      "treatments_tried": "Hydrocortisone (stress dosing protocol established), fludrocortisone, sodium chloride supplementation",
+      "other_info": "Classic salt-wasting 21-hydroxylase deficiency (CYP21A2 mutation), confirmed on newborn screen and genetic testing. Currently on adrenal crisis prevention protocol. Serum 17-OHP elevated at diagnosis.",
+      "patient_type": "Testing the tool"
+    },
+    {
+      "id": "tc_006",
+      "condition": "Prader-Willi Syndrome",
+      "age": "3 years old",
+      "location": "New York",
+      "treatments_tried": "Somatropin (growth hormone), initiated at 18 months",
+      "other_info": "Genetic confirmation via methylation study. Hypotonia and feeding difficulties in infancy now resolved. Early hyperphagia emerging. Global developmental delay, currently receiving PT, OT, and speech therapy.",
+      "patient_type": "Testing the tool"
+    }
+  ]

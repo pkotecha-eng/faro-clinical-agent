@@ -73,7 +73,7 @@ def run_single(tc: dict) -> dict:
     }
 
     try:
-        report = run_faro(condition=condition, patient_profile=patient_profile)
+        report = run_faro(condition=condition, patient_profile=patient_profile, age=tc.get("age"))
         result["completed"] = True
         result["report"] = report
         result["checks"]["trial_found"] = check_trial_found(report)
