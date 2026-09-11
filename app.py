@@ -170,9 +170,10 @@ if 'report_result' in st.session_state:
     st.divider()
     if st.download_button(
         label="📄 Download Report as Text",
-        data=result,
+        data=result.encode('utf-8'),
         file_name=f"FARO_report_{condition.replace(' ', '_')}.txt",
         mime="text/plain",
+        key="download_report",
     ):
         log_download(condition, st.session_state.session_id)
 
