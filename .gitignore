@@ -2,3 +2,8 @@
 __pycache__/
 *.pyc
 venv/
+.DS_Store
+.DS_Store
+eval/results.json.old
+.DS_Store
+eval/results.json.old
