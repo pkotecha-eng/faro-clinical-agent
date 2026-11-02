@@ -771,7 +771,7 @@ return ". ".join(parts) or "No additional profile information provided."
 
 ## 12. Database Layer (`db.py`)
 
-Supabase is used for **session telemetry** and **eval run logging**. Connection is lazy — a client is instantiated per call via `get_client()`.
+Supabase is used for **session telemetry**, and defines a schema for **eval run logging** (see note below — not currently wired in). Connection is lazy — a client is instantiated per call via `get_client()`.
 
 ### `faro_sessions` table
 
@@ -797,6 +797,12 @@ Supabase is used for **session telemetry** and **eval run logging**. Connection 
 | `trial_ids_found`       | `text[]`    | List of NCT/ISRCTN IDs found in report      |
 | `report_word_count`     | `int`       | Word count of final report                  |
 
+**Defined but not wired in:** `log_eval_run()` (`db.py:78`) is the only
+function that writes to this table, and it has zero call sites anywhere in
+the codebase. `eval/run_eval.py` writes its results to `eval/results.json`
+only and never calls `log_eval_run()`. The table and its insert function
+exist in the schema; nothing in the current pipeline populates it.
+
 ### `get_past_searches` (memory layer)
 
 ```python
@@ -815,14 +821,16 @@ All Supabase functions catch `Exception`, print to stdout, and return empty defa
 
 ### Test cases (`test_cases.json`)
 
-Four test scenarios covering rare/complex conditions:
+Six test scenarios covering rare/complex conditions:
 
-| ID       | Condition                           | Age  | Location    |
-|----------|-------------------------------------|------|-------------|
-| `tc_001` | Pediatric Epilepsy                  | 8    | New York    |
-| `tc_002` | Beta Thalassemia                    | 28   | New Jersey  |
-| `tc_003` | Classic Congenital Adrenal Hyperplasia | 6 | New York    |
-| `tc_004` | Prader-Willi Syndrome               | 12   | New York    |
+| ID       | Condition                               | Age        | Location    |
+|----------|------------------------------------------|------------|-------------|
+| `tc_001` | Pediatric Epilepsy                       | 8          | New York    |
+| `tc_002` | Beta Thalassemia                         | 28         | New Jersey  |
+| `tc_003` | Classic Congenital Adrenal Hyperplasia   | 6          | New York    |
+| `tc_004` | Prader-Willi Syndrome                    | 12         | New York    |
+| `tc_005` | Classic Congenital Adrenal Hyperplasia   | 10 months  | New York    |
+| `tc_006` | Prader-Willi Syndrome                    | 3 years    | New York    |
 
 ### Eval checks (`run_eval.py`)
 
@@ -843,6 +851,45 @@ result["passed"] = (
     and all(sections.values())
 )
 ```
+
+### What the evals do and don't verify
+
+**Do:**
+- `trial_found` — a trial-indicator substring (`"NCT"`, `"ISRCTN"`,
+  `"clinicaltrials.gov"`, `"Phase"`, `"Recruiting"`) appears somewhere in
+  the report.
+- `min_length` — the report is at least 1000 characters.
+- `sections` — each of the 8 section headers is present as a literal
+  substring.
+
+**Don't:**
+- **Eligibility correctness** — nothing checks whether a trial's
+  eligibility rating is actually right for the patient.
+- **Fetched-vs-cited NCT IDs** — nothing confirms an NCT/ISRCTN ID
+  appearing in the report was ever actually returned by a tool call; a
+  hallucinated ID would pass.
+- **Verdict consistency between the assessor and the report** — nothing
+  checks that Section 4's stated rating for a trial matches what the
+  eligibility assessor actually concluded for that same trial.
+- **Failure/outage paths** — all 6 test cases assume every upstream API
+  succeeds; there is no case that exercises a tool failure, a partial
+  outage, or a retry path.
+
+**Known false-positive (historical):** the `trial_found` substring check
+is weak enough to pass on broken output. Before `e8200cc0`, a tool
+failure rendered in the report as `"NCT ID: None"` / `"Phase: None"` —
+both still contain the literal substrings `"NCT"` and `"Phase"` — so this
+check could report a pass on a run where every trial source had actually
+failed. `e8200cc0` fixed the tool wrappers so a failure now surfaces as an
+explicit error string instead of a fake record, but the substring check
+itself is unchanged — it would still pass on a different broken-but-
+matching output, since it only checks for the presence of a few
+characters, not that they came from real data.
+
+See `REVIEW_NOTES.md` for the planned upgrade (NCT-ID regex with a
+fetched-vs-cited diff, a verdict-consistency check, and an outage test
+case). None of those exist yet — this section describes the suite as it
+is today, not as planned.
 
 ### Output (`results.json`)
 
