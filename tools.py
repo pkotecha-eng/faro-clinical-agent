@@ -3,9 +3,38 @@ FARO Clinical Agent - Data Tools
 Handles PubMed and ClinicalTrials.gov API calls
 """
 
+import time
+
 import requests
 import xmltodict
 from typing import Any
+
+PUBMED_RETRY_DELAYS = (1, 2)  # seconds, applied between attempts
+
+
+def _get_with_retry(url: str, params: dict, expect_content_type: str, timeout: int = 10):
+    """GET with validation + retry/backoff for non-200 or wrong-content-type responses.
+
+    NCBI's eutils intermittently return non-200 or non-XML/JSON bodies under
+    request load (observed directly: 1-3 failures per 10 calls when fired
+    back-to-back or concurrently, 0 failures when called in isolation) even
+    though the request itself is well-formed. Retrying with backoff absorbs
+    that transient failure instead of surfacing it as a hard error on the
+    first hiccup.
+    """
+    last_detail = None
+    for attempt in range(len(PUBMED_RETRY_DELAYS) + 1):
+        resp = requests.get(url, params=params, timeout=timeout)
+        content_type = resp.headers.get("content-type", "")
+        if resp.status_code == 200 and expect_content_type in content_type:
+            return resp
+        last_detail = (
+            f"status={resp.status_code} content-type={content_type!r} "
+            f"body[:200]={resp.text[:200]!r}"
+        )
+        if attempt < len(PUBMED_RETRY_DELAYS):
+            time.sleep(PUBMED_RETRY_DELAYS[attempt])
+    raise RuntimeError(f"GET {url} failed after {len(PUBMED_RETRY_DELAYS) + 1} attempts: {last_detail}")
 
 
 def search_pubmed(query: str, max_results: int = 5) -> list[dict]:
@@ -19,7 +48,7 @@ def search_pubmed(query: str, max_results: int = 5) -> list[dict]:
             "retmax": max_results,
             "retmode": "json",
         }
-        search_resp = requests.get(search_url, params=search_params, timeout=10)
+        search_resp = _get_with_retry(search_url, search_params, expect_content_type="json")
         ids = search_resp.json().get("esearchresult", {}).get("idlist", [])
 
         if not ids:
@@ -32,7 +61,7 @@ def search_pubmed(query: str, max_results: int = 5) -> list[dict]:
             "id": ",".join(ids),
             "retmode": "xml",
         }
-        fetch_resp = requests.get(fetch_url, params=fetch_params, timeout=10)
+        fetch_resp = _get_with_retry(fetch_url, fetch_params, expect_content_type="xml")
         data = xmltodict.parse(fetch_resp.text)
 
         articles = data.get("PubmedArticleSet", {}).get("PubmedArticle", [])

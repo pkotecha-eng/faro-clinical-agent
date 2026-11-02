@@ -23,6 +23,19 @@ claude = LLM(
 )
 
 
+def _tool_error(results: list[dict]) -> str | None:
+    """Detect the tools.py exception-fallback shape: [{"error": "..."}].
+
+    A bare `if not results` check doesn't catch this — the list is
+    non-empty, so without this check it falls into the per-item
+    formatting loop and produces a fake trial/paper with every field
+    rendered as None.
+    """
+    if results and len(results) == 1 and "error" in results[0]:
+        return results[0]["error"]
+    return None
+
+
 class PubMedInput(BaseModel):
     query: str = Field(..., description="Search query for PubMed")
 
@@ -38,6 +51,9 @@ class PubMedTool(BaseTool):
 
     def _run(self, query: str) -> str:
         results = search_pubmed(query=query, max_results=5)
+        error = _tool_error(results)
+        if error:
+            return f"Error searching PubMed: {error}"
         if not results:
             return "No papers found."
         output = []
@@ -59,6 +75,9 @@ class ClinicalTrialsTool(BaseTool):
 
     def _run(self, condition: str) -> str:
         results = search_clinical_trials(condition=condition, status="RECRUITING", max_results=5)
+        error = _tool_error(results)
+        if error:
+            return f"Error searching ClinicalTrials.gov: {error}"
         if not results:
             return "No trials found."
         output = []
@@ -94,6 +113,9 @@ class ISRCTNTool(BaseTool):
 
     def _run(self, query: str) -> str:
         results = search_isrctn(query=query, max_results=5)
+        error = _tool_error(results)
+        if error:
+            return f"Error searching ISRCTN: {error}"
         if not results:
             return "No ISRCTN trials found."
         output = []

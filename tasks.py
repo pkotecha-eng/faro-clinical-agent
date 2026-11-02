@@ -143,7 +143,11 @@ def create_tasks(agents, condition: str, patient_profile: str, context: str = No
             "can bring to their doctor."
         ),
         agent=synthesizer,
-        context=[] if context else [find_trials, search_literature, assess_eligibility],
+        # Always include assess_eligibility so CrewAI's native sequential
+        # context-passing carries its actual ratings forward — context=[]
+        # here would silently drop them (CrewAI's `_get_context` treats an
+        # empty list the same as "no context from other tasks").
+        context=[assess_eligibility] if context else [find_trials, search_literature, assess_eligibility],
     )
 
     return find_trials, search_literature, assess_eligibility, synthesize_report
